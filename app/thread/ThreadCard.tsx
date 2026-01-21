@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { deleteThreadAction } from "./action";
 
 type Thread = {
   id: string;
   author: string;
+  authorId?: string | null;
   title: string;
   content?: string;
   image?: string | null;
@@ -13,9 +15,31 @@ type Thread = {
   createdAt?: string;
 };
 
-export default function ThreadCard({ thread }: { thread: Thread }) {
+type ThreadCardProps = {
+  thread: Thread;
+  currentUserId?: string | null;
+};
+
+export default function ThreadCard({ thread, currentUserId }: ThreadCardProps) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(parseInt(thread.likes || "0") || 0);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const isAuthor = currentUserId && thread.authorId && currentUserId === thread.authorId;
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const toggleLike = () => {
     if (liked) {
@@ -25,6 +49,17 @@ export default function ThreadCard({ thread }: { thread: Thread }) {
       setLikeCount((prev) => prev + 1);
       setLiked(true);
     }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    const result = await deleteThreadAction(thread.id);
+    if (result.error) {
+      alert(result.error);
+      setIsDeleting(false);
+      setShowConfirm(false);
+    }
+    // On success, the page will revalidate and remove the thread
   };
 
   // Format relative time
@@ -45,81 +80,142 @@ export default function ThreadCard({ thread }: { thread: Thread }) {
   };
 
   return (
-    <div className="group relative w-full rounded-2xl border border-white/25 bg-white/5 backdrop-blur-lg overflow-hidden transition-all hover:border-purple-500/40">
-      {/* --- MAIN PADDING CONTAINER --- */}
-      <Link href={`/thread/${thread.id}`} className="block cursor-pointer">
-        <div className="p-5 pb-3">
-          {/* ROW 1: HEADER */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-lg text-white font-medium">
-                @{thread.author}
-              </span>
-              <span className="text-xs text-neutral-500">
-                · {formatTime(thread.createdAt)}
-              </span>
+    <>
+      {/* Delete Confirmation Modal */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white mb-2">Delete Post?</h3>
+            <p className="text-neutral-400 text-sm mb-6">
+              This action cannot be undone. All comments on this thread will also be deleted.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
             </div>
-            <button className="text-neutral-500 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors -mr-2 -mt-2">
-              <MoreVerticalIcon className="w-5 h-5" />
-            </button>
           </div>
+        </div>
+      )}
 
-          {/* ROW 2: CONTENT */}
-          <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-6">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-lg md:text-xl font-semibold text-white leading-snug">
-                {thread.title}
-              </h3>
-              {thread.content && (
-                <p className="text-neutral-400 text-sm mt-2 line-clamp-2">
-                  {thread.content}
-                </p>
+      <div className="group relative w-full rounded-2xl border border-white/25 bg-white/5 backdrop-blur-lg overflow-hidden transition-all hover:border-purple-500/40">
+        {/* --- MAIN PADDING CONTAINER --- */}
+        <Link href={`/thread/${thread.id}`} className="block cursor-pointer">
+          <div className="p-5 pb-3">
+            {/* ROW 1: HEADER */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-lg text-white font-medium">
+                  @{thread.author}
+                </span>
+                <span className="text-xs text-neutral-500">
+                  · {formatTime(thread.createdAt)}
+                </span>
+              </div>
+            </div>
+
+            {/* ROW 2: CONTENT */}
+            <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-6">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg md:text-xl font-semibold text-white leading-snug">
+                  {thread.title}
+                </h3>
+                {thread.content && (
+                  <p className="text-neutral-400 text-sm mt-2 line-clamp-2">
+                    {thread.content}
+                  </p>
+                )}
+              </div>
+
+              {thread.image && (
+                <div className="shrink-0 w-full md:w-32">
+                  <img
+                    src={thread.image}
+                    alt="Topic attachment"
+                    className="w-full h-48 md:h-32 rounded-xl object-cover border border-white/10 bg-white/5"
+                  />
+                </div>
               )}
             </div>
+          </div>
+        </Link>
 
-            {thread.image && (
-              <div className="shrink-0 w-full md:w-32">
-                <img
-                  src={thread.image}
-                  alt="Topic attachment"
-                  className="w-full h-48 md:h-32 rounded-xl object-cover border border-white/10 bg-white/5"
-                />
+        {/* More Options Button - positioned absolute */}
+        {isAuthor && (
+          <div className="absolute top-3 right-3" ref={menuRef}>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowMenu(!showMenu);
+              }}
+              className="text-neutral-500 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
+            >
+              <MoreVerticalIcon className="w-5 h-5" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-1 w-36 bg-neutral-900 border border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    setShowConfirm(true);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-white/10 flex items-center gap-2 transition-colors"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                  Delete
+                </button>
               </div>
             )}
           </div>
-        </div>
-      </Link>
+        )}
 
-      {/* --- INTERACTIVE FOOTER --- */}
-      <div className="bg-black/20 px-4 py-2 flex items-center gap-2 border-t border-white/5">
-        {/* LIKE BUTTON */}
-        <button
-          onClick={toggleLike}
-          className="group/like flex items-center justify-start w-16 gap-1.5 transition-colors shrink-0 p-2 rounded-lg hover:bg-white/5"
-        >
-          <HeartIcon
-            filled={liked}
-            className={`w-4 h-4 transition-transform duration-300 ${liked ? "scale-110 text-pink-500" : "text-white/60 group-hover/like:text-pink-400"}`}
-          />
-          <span
-            className={`text-xs font-medium ${liked ? "text-pink-400" : "text-neutral-400 group-hover/like:text-neutral-200"}`}
+        {/* --- INTERACTIVE FOOTER --- */}
+        <div className="bg-black/20 px-4 py-2 flex items-center gap-2 border-t border-white/5">
+          {/* LIKE BUTTON */}
+          <button
+            onClick={toggleLike}
+            className="group/like flex items-center justify-start w-16 gap-1.5 transition-colors shrink-0 p-2 rounded-lg hover:bg-white/5"
           >
-            {likeCount || "Like"}
-          </span>
-        </button>
+            <HeartIcon
+              filled={liked}
+              className={`w-4 h-4 transition-transform duration-300 ${liked ? "scale-110 text-pink-500" : "text-white/60 group-hover/like:text-pink-400"}`}
+            />
+            <span
+              className={`text-xs font-medium ${liked ? "text-pink-400" : "text-neutral-400 group-hover/like:text-neutral-200"}`}
+            >
+              {likeCount || "Like"}
+            </span>
+          </button>
 
-        {/* COMMENT BUTTON */}
-        <Link
-          href={`/thread/${thread.id}`}
-          className="group/comment flex items-center justify-start w-16 gap-1.5 transition-colors shrink-0 p-2 rounded-lg hover:bg-white/5"
-        >
-          <MessageIcon className="w-5 h-5 text-white/60 group-hover/comment:text-purple-400" />
-          <span className="text-xs font-medium text-neutral-400 group-hover/comment:text-neutral-200">
-            Reply
-          </span>
-        </Link>
+          {/* COMMENT BUTTON */}
+          <Link
+            href={`/thread/${thread.id}`}
+            className="group/comment flex items-center justify-start w-16 gap-1.5 transition-colors shrink-0 p-2 rounded-lg hover:bg-white/5"
+          >
+            <MessageIcon className="w-5 h-5 text-white/60 group-hover/comment:text-purple-400" />
+            <span className="text-xs font-medium text-neutral-400 group-hover/comment:text-neutral-200">
+              Reply
+            </span>
+          </Link>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -183,3 +279,25 @@ function MoreVerticalIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
+

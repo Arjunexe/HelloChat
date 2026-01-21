@@ -50,7 +50,7 @@ export default async function ThreadPage() {
             </div>
           ) : (
             threads.map((thread) => (
-              <ThreadCard key={thread.id} thread={thread} />
+              <ThreadCard key={thread.id} thread={thread} currentUserId={session.user?.id} />
             ))
           )}
         </div>

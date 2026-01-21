@@ -160,3 +160,43 @@ export async function addComment(data: AddCommentData) {
     return { error: "System Error: Please try again later." };
   }
 }
+
+export async function deleteThreadAction(threadId: string) {
+  // Get session to verify user
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "You must be logged in to delete a thread" };
+  }
+
+  try {
+    await connectDB();
+
+    // Validate thread ID
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return { error: "Invalid thread ID" };
+    }
+
+    // Find the thread
+    const thread = await Thread.findById(threadId);
+    if (!thread) {
+      return { error: "Thread not found" };
+    }
+
+    // Check if current user is the author
+    if (thread.author.toString() !== session.user.id) {
+      return { error: "You can only delete your own threads" };
+    }
+
+    // Delete all comments associated with this thread
+    await Comment.deleteMany({ threadId: threadId });
+
+    // Delete the thread
+    await Thread.findByIdAndDelete(threadId);
+
+    revalidatePath("/thread");
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting thread:", error);
+    return { error: "System Error: Please try again later." };
+  }
+}
