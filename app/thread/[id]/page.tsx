@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getThreadById } from "../action";
 import { auth } from "@/auth";
 import CommentForm from "./CommentForm";
+import ShareButton from "./ShareButton";
+import type { Metadata } from "next";
 
 interface PageProps {
   params: Promise<{
@@ -10,12 +12,52 @@ interface PageProps {
   }>;
 }
 
-export default async function ThreadExpand({ params }: PageProps) {
-  // Protect this route
-  const session = await auth();
-  if (!session) {
-    redirect("/login");
+// Generate dynamic metadata for social media previews
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const thread = await getThreadById(id);
+
+  if (!thread) {
+    return {
+      title: "Thread Not Found | All-Chat",
+    };
   }
+
+  const description = thread.content
+    ? thread.content.slice(0, 160) + (thread.content.length > 160 ? "..." : "")
+    : `Posted by @${thread.author} on All-Chat`;
+
+  return {
+    title: `${thread.title} | All-Chat`,
+    description,
+    openGraph: {
+      title: thread.title,
+      description,
+      type: "article",
+      authors: [`@${thread.author}`],
+      ...(thread.image && {
+        images: [
+          {
+            url: thread.image,
+            width: 1200,
+            height: 630,
+            alt: thread.title,
+          },
+        ],
+      }),
+    },
+    twitter: {
+      card: thread.image ? "summary_large_image" : "summary",
+      title: thread.title,
+      description,
+      ...(thread.image && { images: [thread.image] }),
+    },
+  };
+}
+
+export default async function ThreadExpand({ params }: PageProps) {
+  // Get session (optional - guests can view)
+  const session = await auth();
 
   const { id } = await params;
   const thread = await getThreadById(id);
@@ -81,13 +123,26 @@ export default async function ThreadExpand({ params }: PageProps) {
               {thread.title}
             </p>
 
-            {/* Big Expanded Image */}
+            {/* Big Expanded Image with Blurred Background Fill */}
             {thread.image && (
-              <div className="rounded-xl overflow-hidden border border-white/10">
+              <div className="relative rounded-xl overflow-hidden border border-white/10 h-[400px] md:h-[500px]">
+                {/* Blurred background fill */}
+                <div
+                  className="absolute inset-0 scale-110"
+                  style={{
+                    backgroundImage: `url(${thread.image})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    filter: 'blur(20px)',
+                  }}
+                />
+                {/* Dark overlay to soften the blur */}
+                <div className="absolute inset-0 bg-black/30" />
+                {/* Actual image - fits fully without cropping */}
                 <img
                   src={thread.image}
                   alt="Thread attachment"
-                  className="w-full h-auto max-h-[500px] object-cover"
+                  className="relative z-10 w-full h-full object-contain"
                 />
               </div>
             )}
@@ -98,15 +153,18 @@ export default async function ThreadExpand({ params }: PageProps) {
           </div>
 
           {/* Stats Bar */}
-          <div className="px-6 py-4 bg-black/20 border-t border-white/5 flex gap-6 text-sm text-neutral-400">
-            <span>{thread.likes || 0} Likes</span>
-            <span>{thread.comments?.length || 0} Comments</span>
+          <div className="px-6 py-4 bg-black/20 border-t border-white/5 flex items-center justify-between">
+            <div className="flex gap-6 text-sm text-neutral-400">
+              <span>{thread.likeCount || 0} Likes</span>
+              <span>{thread.comments?.length || 0} Comments</span>
+            </div>
+            <ShareButton threadId={thread.id} title={thread.title} />
           </div>
         </div>
 
         {/* --- ADD COMMENT FORM --- */}
         <div className="mt-6">
-          <CommentForm threadId={thread.id} />
+          <CommentForm threadId={thread.id} isLoggedIn={!!session} />
         </div>
 
         {/* --- COMMENTS SECTION --- */}

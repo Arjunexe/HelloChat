@@ -2,14 +2,11 @@ import ThreadButton from "@/components/threadComponents/ThreadButton";
 import ThreadCard from "./ThreadCard";
 import { getThreads } from "./action";
 import { auth } from "@/auth";
-import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default async function ThreadPage() {
-  // Protect this route - require authentication
+  // Get session (optional - guests can view)
   const session = await auth();
-  if (!session) {
-    redirect("/login");
-  }
 
   // Fetch threads from the database
   const threads = await getThreads();
@@ -36,9 +33,23 @@ export default async function ThreadPage() {
         <div className="w-full max-w-3xl mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Topics</h1>
-            <p className="text-sm text-neutral-400">Welcome, {session.user?.name}</p>
+            <p className="text-sm text-neutral-400">
+              {session?.user?.name
+                ? `Welcome, ${session.user.name}`
+                : <span>Browsing as guest · <Link href="/login" className="text-purple-400 hover:underline">Login</Link></span>
+              }
+            </p>
           </div>
-          <ThreadButton />
+          {session ? (
+            <ThreadButton />
+          ) : (
+            <Link
+              href="/login"
+              className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-[0_0_20px_rgba(147,51,234,0.3)]"
+            >
+              Login to Post
+            </Link>
+          )}
         </div>
 
         {/* List of Threads */}
@@ -50,7 +61,7 @@ export default async function ThreadPage() {
             </div>
           ) : (
             threads.map((thread) => (
-              <ThreadCard key={thread.id} thread={thread} currentUserId={session.user?.id} />
+              <ThreadCard key={thread.id} thread={thread} currentUserId={session?.user?.id ?? null} />
             ))
           )}
         </div>

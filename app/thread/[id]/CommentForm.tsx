@@ -1,16 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { addComment } from "../action";
 
 interface CommentFormProps {
     threadId: string;
+    isLoggedIn?: boolean;
 }
 
-export default function CommentForm({ threadId }: CommentFormProps) {
+export default function CommentForm({ threadId, isLoggedIn = false }: CommentFormProps) {
     const [text, setText] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState("");
+
+    // Show login prompt for guests
+    if (!isLoggedIn) {
+        return (
+            <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+                <p className="text-neutral-400 mb-3">Want to join the conversation?</p>
+                <Link
+                    href="/login"
+                    className="inline-block bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                >
+                    Login to Comment
+                </Link>
+            </div>
+        );
+    }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
