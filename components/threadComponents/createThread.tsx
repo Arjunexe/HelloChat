@@ -2,6 +2,7 @@
 
 import { createThreadAction } from "@/app/thread/action";
 import { uploadToChatroom } from "@/lib/cloudinary/cloudinaryUpload";
+import { compressImage } from "@/lib/compressImage";
 import { useState, ChangeEvent } from "react";
 
 interface CreateThreadModalProps {
@@ -29,10 +30,24 @@ export default function CreateThreadModal({ onClose }: CreateThreadModalProps) {
       }
       let finalImageUrl: string | null = null;
       if (imageFile) {
+        // Compress image before upload (max 4MB, max 1920px, 80% quality)
+        let fileToUpload = imageFile;
+        try {
+          fileToUpload = await compressImage(imageFile, 4, 1920, 0.8);
+        } catch (compressError) {
+          console.error("Compression failed, using original:", compressError);
+        }
+
         const formData = new FormData();
-        formData.append("image", imageFile);
-        const result = await uploadToChatroom(formData);
-        finalImageUrl = result.url;
+        formData.append("image", fileToUpload);
+        const uploadResult = await uploadToChatroom(formData);
+
+        // Show specific upload error
+        if (!uploadResult.success) {
+          alert(uploadResult.error || "Image upload failed");
+          return;
+        }
+        finalImageUrl = uploadResult.url;
       }
 
       const result = await createThreadAction({
@@ -49,7 +64,7 @@ export default function CreateThreadModal({ onClose }: CreateThreadModalProps) {
       }
     } catch (error) {
       console.log("error during handleUpload: ", error);
-      alert("Something went wrong. Please try again.");
+      alert("Network error. Please check your connection and try again.");
     }
   }
 
