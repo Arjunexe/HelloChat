@@ -58,7 +58,8 @@ export async function getThreads() {
       title: thread.title,
       content: thread.content || "",
       image: thread.postImage || null,
-      likes: thread.likes || "0",
+      likedBy: (thread.likedBy || []).map((id: any) => id.toString()),
+      likeCount: (thread.likedBy || []).length,
       createdAt: thread.createdAt?.toISOString() || new Date().toISOString(),
     }));
   } catch (error) {
@@ -100,7 +101,8 @@ export async function getThreadById(id: string) {
       title: typedThread.title,
       content: typedThread.content || "",
       image: typedThread.postImage || null,
-      likes: typedThread.likes || "0",
+      likedBy: (typedThread.likedBy || []).map((id: any) => id.toString()),
+      likeCount: (typedThread.likedBy || []).length,
       createdAt: typedThread.createdAt?.toISOString() || new Date().toISOString(),
       comments: typedComments.map((c) => ({
         id: c._id.toString(),
@@ -197,6 +199,62 @@ export async function deleteThreadAction(threadId: string) {
     return { success: true };
   } catch (error) {
     console.error("Error deleting thread:", error);
+    return { error: "System Error: Please try again later." };
+  }
+}
+
+export async function toggleLikeAction(threadId: string) {
+  // Get session to verify user
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "You must be logged in to like a thread" };
+  }
+
+  try {
+    await connectDB();
+
+    // Validate thread ID
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return { error: "Invalid thread ID" };
+    }
+
+    // Find the thread
+    const thread = await Thread.findById(threadId);
+    if (!thread) {
+      return { error: "Thread not found" };
+    }
+
+    const userId = new mongoose.Types.ObjectId(session.user.id);
+    const likedBy = thread.likedBy || [];
+    const alreadyLiked = likedBy.some((id: mongoose.Types.ObjectId) => id.equals(userId));
+
+    if (alreadyLiked) {
+      // Remove like
+      await Thread.findByIdAndUpdate(threadId, {
+        $pull: { likedBy: userId },
+      });
+    } else {
+      // Add like
+      await Thread.findByIdAndUpdate(threadId, {
+        $addToSet: { likedBy: userId },
+      });
+    }
+
+    // Get updated thread for new count
+    const updatedThread = await Thread.findById(threadId);
+    const newLikeCount = (updatedThread?.likedBy || []).length;
+    const nowLiked = !alreadyLiked;
+
+    revalidatePath("/thread");
+    revalidatePath(`/thread/${threadId}`);
+
+    return {
+      success: true,
+      liked: nowLiked,
+      likeCount: newLikeCount,
+    };
+  } catch (error) {
+    console.error("Error toggling like:", error);
     return { error: "System Error: Please try again later." };
   }
 }

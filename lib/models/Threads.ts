@@ -6,7 +6,7 @@ export interface Thread extends Document {
   title: string;
   content: string;
   postImage: string;
-  likes: string;
+  likedBy: mongoose.Types.ObjectId[];
   createdAt: Date;
 }
 
@@ -35,9 +35,10 @@ const ThreadSchema = new Schema<Thread>(
       required: false,
     },
 
-    likes: {
-      type: String,
-      required: false,
+    likedBy: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
     },
   },
 
@@ -47,3 +48,4 @@ const ThreadSchema = new Schema<Thread>(
 const Thread = models.Thread || model<Thread>("Thread", ThreadSchema);
 
 export default Thread;
+

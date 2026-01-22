@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
-import { deleteThreadAction } from "./action";
+import { deleteThreadAction, toggleLikeAction } from "./action";
 
 type Thread = {
   id: string;
@@ -11,7 +11,8 @@ type Thread = {
   title: string;
   content?: string;
   image?: string | null;
-  likes?: string;
+  likedBy?: string[];
+  likeCount?: number;
   createdAt?: string;
 };
 
@@ -21,8 +22,11 @@ type ThreadCardProps = {
 };
 
 export default function ThreadCard({ thread, currentUserId }: ThreadCardProps) {
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(parseInt(thread.likes || "0") || 0);
+  // Initialize liked state based on whether currentUserId is in likedBy array
+  const initialLiked = currentUserId ? (thread.likedBy || []).includes(currentUserId) : false;
+  const [liked, setLiked] = useState(initialLiked);
+  const [likeCount, setLikeCount] = useState(thread.likeCount || 0);
+  const [isLiking, setIsLiking] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -41,14 +45,30 @@ export default function ThreadCard({ thread, currentUserId }: ThreadCardProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const toggleLike = () => {
-    if (liked) {
-      setLikeCount((prev) => prev - 1);
-      setLiked(false);
-    } else {
-      setLikeCount((prev) => prev + 1);
-      setLiked(true);
+  const toggleLike = async () => {
+    if (!currentUserId || isLiking) return;
+
+    // Optimistic update
+    const wasLiked = liked;
+    const prevCount = likeCount;
+    setLiked(!wasLiked);
+    setLikeCount(wasLiked ? prevCount - 1 : prevCount + 1);
+    setIsLiking(true);
+
+    const result = await toggleLikeAction(thread.id);
+
+    if (result.error) {
+      // Revert on error
+      setLiked(wasLiked);
+      setLikeCount(prevCount);
+      alert(result.error);
+    } else if (result.success) {
+      // Sync with server response
+      setLiked(result.liked);
+      setLikeCount(result.likeCount);
     }
+
+    setIsLiking(false);
   };
 
   const handleDelete = async () => {
