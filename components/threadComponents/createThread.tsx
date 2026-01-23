@@ -37,15 +37,19 @@ export default function CreateThreadModal({ onClose }: CreateThreadModalProps) {
       if (imageFile) {
         // Compress image before upload (max 4MB, max 1920px, 80% quality)
         let fileToUpload = imageFile;
+        console.log("[DEBUG] Starting compression...", imageFile.size);
         try {
           fileToUpload = await compressImage(imageFile, 4, 1920, 0.8);
+          console.log("[DEBUG] Compression complete", fileToUpload.size);
         } catch (compressError) {
           console.error("Compression failed, using original:", compressError);
         }
 
+        console.log("[DEBUG] Starting Cloudinary upload...");
         const formData = new FormData();
         formData.append("image", fileToUpload);
         const uploadResult = await uploadToChatroom(formData);
+        console.log("[DEBUG] Upload result:", uploadResult);
 
         // Show specific upload error
         if (!uploadResult.success) {
@@ -55,11 +59,13 @@ export default function CreateThreadModal({ onClose }: CreateThreadModalProps) {
         finalImageUrl = uploadResult.url;
       }
 
+      console.log("[DEBUG] Creating thread with image URL:", finalImageUrl);
       const result = await createThreadAction({
         title: title,
         content: content,
         imageUrl: finalImageUrl,
       });
+      console.log("[DEBUG] Thread creation result:", result);
 
       if (result?.error) {
         alert(result.error);
