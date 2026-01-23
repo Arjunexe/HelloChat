@@ -1,7 +1,6 @@
 "use client";
 
 import { createThreadAction } from "@/app/thread/action";
-import { uploadToChatroom } from "@/lib/cloudinary/cloudinaryUpload";
 import { compressImage } from "@/lib/compressImage";
 import { useState, ChangeEvent } from "react";
 
@@ -48,7 +47,12 @@ export default function CreateThreadModal({ onClose }: CreateThreadModalProps) {
         console.log("[DEBUG] Starting Cloudinary upload...");
         const formData = new FormData();
         formData.append("image", fileToUpload);
-        const uploadResult = await uploadToChatroom(formData);
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadResult = await response.json();
         console.log("[DEBUG] Upload result:", uploadResult);
 
         // Show specific upload error
